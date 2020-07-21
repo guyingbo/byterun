@@ -6,26 +6,29 @@ import types
 
 import six
 
-PY3, PY2 = six.PY3, not six.PY3
-
 
 def make_cell(value):
     # Thanks to Alex Gaynor for help with this bit of twistiness.
     # Construct an actual cell object by creating a closure right here,
     # and grabbing the cell object out of the function we create.
     fn = (lambda x: lambda: x)(value)
-    if PY3:
-        return fn.__closure__[0]
-    else:
-        return fn.func_closure[0]
+    return fn.__closure__[0]
 
 
 class Function(object):
     __slots__ = [
-        'func_code', 'func_name', 'func_defaults', 'func_globals',
-        'func_locals', 'func_dict', 'func_closure',
-        '__name__', '__dict__', '__doc__',
-        '_vm', '_func',
+        "func_code",
+        "func_name",
+        "func_defaults",
+        "func_globals",
+        "func_locals",
+        "func_dict",
+        "func_closure",
+        "__name__",
+        "__dict__",
+        "__doc__",
+        "_vm",
+        "_func",
     ]
 
     def __init__(self, name, code, globs, defaults, closure, vm):
@@ -41,39 +44,24 @@ class Function(object):
 
         # Sometimes, we need a real Python function.  This is for that.
         kw = {
-            'argdefs': self.func_defaults,
+            "argdefs": self.func_defaults,
         }
         if closure:
-            kw['closure'] = tuple(make_cell(0) for _ in closure)
+            kw["closure"] = tuple(make_cell(0) for _ in closure)
         self._func = types.FunctionType(code, globs, **kw)
 
-    def __repr__(self):         # pragma: no cover
-        return '<Function %s at 0x%08x>' % (
-            self.func_name, id(self)
-        )
+    def __repr__(self):  # pragma: no cover
+        return "<Function %s at 0x%08x>" % (self.func_name, id(self))
 
     def __get__(self, instance, owner):
         if instance is not None:
             return Method(instance, owner, self)
-        if PY2:
-            return Method(None, owner, self)
-        else:
-            return self
+        return self
 
     def __call__(self, *args, **kwargs):
-        if PY2 and self.func_name in ["<setcomp>", "<dictcomp>", "<genexpr>"]:
-            # D'oh! http://bugs.python.org/issue19611 Py2 doesn't know how to
-            # inspect set comprehensions, dict comprehensions, or generator
-            # expressions properly.  They are always functions of one argument,
-            # so just do the right thing.
-            assert len(args) == 1 and not kwargs, "Surprising comprehension!"
-            callargs = {".0": args[0]}
-        else:
-            callargs = inspect.getcallargs(self._func, *args, **kwargs)
-        frame = self._vm.make_frame(
-            self.func_code, callargs, self.func_globals, {}
-        )
-        CO_GENERATOR = 32           # flag for "this code uses yield"
+        callargs = inspect.getcallargs(self._func, *args, **kwargs)
+        frame = self._vm.make_frame(self.func_code, callargs, self.func_globals, {})
+        CO_GENERATOR = 32  # flag for "this code uses yield"
         if self.func_code.co_flags & CO_GENERATOR:
             gen = Generator(frame, self._vm)
             frame.generator = gen
@@ -82,18 +70,19 @@ class Function(object):
             retval = self._vm.run_frame(frame)
         return retval
 
+
 class Method(object):
     def __init__(self, obj, _class, func):
         self.im_self = obj
         self.im_class = _class
         self.im_func = func
 
-    def __repr__(self):         # pragma: no cover
+    def __repr__(self):  # pragma: no cover
         name = "%s.%s" % (self.im_class.__name__, self.im_func.func_name)
         if self.im_self is not None:
-            return '<Bound Method %s of %s>' % (name, self.im_self)
+            return "<Bound Method %s of %s>" % (name, self.im_self)
         else:
-            return '<Unbound Method %s>' % (name,)
+            return "<Unbound Method %s>" % (name,)
 
     def __call__(self, *args, **kwargs):
         if self.im_self is not None:
@@ -121,6 +110,7 @@ class Cell(object):
            actual value.
 
     """
+
     def __init__(self, value):
         self.contents = value
 
@@ -146,12 +136,12 @@ class Frame(object):
             self.f_builtins = f_back.f_builtins
         else:
             try:
-                self.f_builtins = f_globals['__builtins__']
-                if hasattr(self.f_builtins, '__dict__'):
+                self.f_builtins = f_globals["__builtins__"]
+                if hasattr(self.f_builtins, "__dict__"):
                     self.f_builtins = self.f_builtins.__dict__
             except KeyError:
                 # No builtins! Make up a minimal one with None.
-                self.f_builtins = {'None': None}
+                self.f_builtins = {"None": None}
 
         self.f_lineno = f_code.co_firstlineno
         self.f_lasti = 0
@@ -178,9 +168,11 @@ class Frame(object):
         self.block_stack = []
         self.generator = None
 
-    def __repr__(self):         # pragma: no cover
-        return '<Frame at 0x%08x: %r @ %d>' % (
-            id(self), self.f_code.co_filename, self.f_lineno
+    def __repr__(self):  # pragma: no cover
+        return "<Frame at 0x%08x: %r @ %d>" % (
+            id(self),
+            self.f_code.co_filename,
+            self.f_lineno,
         )
 
     def line_number(self):
